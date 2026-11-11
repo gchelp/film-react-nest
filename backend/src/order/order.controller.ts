@@ -8,9 +8,6 @@ export class OrderController {
 
   @Post()
   create(@Body() body: CreateOrderDto | TicketDto[]) {
-    const dto: CreateOrderDto = Array.isArray(body)
-      ? { email: '', phone: '', tickets: body }
-      : body;
-    return this.orderService.create(dto);
+    return this.orderService.create(body);
   }
 }

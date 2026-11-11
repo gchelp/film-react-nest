@@ -5,20 +5,22 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { FilmsRepository } from '../repository/films.repository';
-import { CreateOrderDto, OrderResultDto } from './dto/order.dto';
+import { CreateOrderDto, OrderResultDto, TicketDto } from './dto/order.dto';
 
 @Injectable()
 export class OrderService {
   constructor(private readonly filmsRepository: FilmsRepository) {}
 
-  async create(dto: CreateOrderDto): Promise<OrderResultDto> {
-    if (!dto.tickets?.length) {
+  async create(body: CreateOrderDto | TicketDto[]): Promise<OrderResultDto> {
+    const tickets = Array.isArray(body) ? body : body?.tickets;
+
+    if (!tickets?.length) {
       throw new BadRequestException('No tickets in order');
     }
 
     // 1. Проверяем все билеты до записи
     const keys = new Set<string>();
-    for (const t of dto.tickets) {
+    for (const t of tickets) {
       const session = await this.filmsRepository.getSession(t.film, t.session);
       if (!session) throw new NotFoundException('Film or session not found');
 
@@ -41,7 +43,7 @@ export class OrderService {
     }
 
     // 2. Записываем
-    for (const t of dto.tickets) {
+    for (const t of tickets) {
       await this.filmsRepository.takeSeat(
         t.film,
         t.session,
@@ -49,7 +51,7 @@ export class OrderService {
       );
     }
 
-    const items = dto.tickets.map((t) => ({ ...t, id: randomUUID() }));
+    const items = tickets.map((t) => ({ ...t, id: randomUUID() }));
     return { total: items.length, items };
   }
 }
