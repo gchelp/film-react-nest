@@ -4,7 +4,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 export class Session {
   @Prop({ required: true }) id: string;
   @Prop() daytime: string;
-  @Prop() hall: string;
+  @Prop() hall: number;
   @Prop() rows: number;
   @Prop() seats: number;
   @Prop() price: number;

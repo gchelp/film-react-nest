@@ -1,13 +1,16 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { OrderService } from './order.service';
-import { CreateOrderDto } from './dto/order.dto';
+import { CreateOrderDto, TicketDto } from './dto/order.dto';
 
 @Controller('order')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
 
   @Post()
-  create(@Body() dto: CreateOrderDto) {
+  create(@Body() body: CreateOrderDto | TicketDto[]) {
+    const dto: CreateOrderDto = Array.isArray(body)
+      ? { email: '', phone: '', tickets: body }
+      : body;
     return this.orderService.create(dto);
   }
 }

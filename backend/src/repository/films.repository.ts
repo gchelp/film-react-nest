@@ -19,7 +19,7 @@ const toFilmDto = (f: Film): FilmDto => ({
 const toScheduleDto = (s: Session): ScheduleDto => ({
   id: s.id,
   daytime: s.daytime,
-  hall: String(s.hall),
+  hall: s.hall,
   rows: s.rows,
   seats: s.seats,
   price: s.price,
