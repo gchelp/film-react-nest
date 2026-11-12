@@ -5,14 +5,14 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { FilmsRepository } from '../repository/films.repository';
-import { CreateOrderDto, OrderResultDto, TicketDto } from './dto/order.dto';
+import { CreateOrderDto, OrderResultDto } from './dto/order.dto';
 
 @Injectable()
 export class OrderService {
   constructor(private readonly filmsRepository: FilmsRepository) {}
 
-  async create(body: CreateOrderDto | TicketDto[]): Promise<OrderResultDto> {
-    const tickets = Array.isArray(body) ? body : body?.tickets;
+  async create(dto: CreateOrderDto): Promise<OrderResultDto> {
+    const tickets = dto.tickets;
 
     if (!tickets?.length) {
       throw new BadRequestException('No tickets in order');
