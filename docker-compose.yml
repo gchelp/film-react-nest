@@ -1,0 +1,63 @@
+services:
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - film-net
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '8080:80'
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - database
+    networks:
+      - film-net
+
+  backend:
+    build: ./backend
+    image: ghcr.io/gchelp/film-react-nest-backend:latest
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - database
+    networks:
+      - film-net
+
+  frontend:
+    build: ./frontend
+    image: ghcr.io/gchelp/film-react-nest-frontend:latest
+    restart: 'no'
+    volumes:
+      - frontend-dist:/shared
+
+  nginx:
+    build: ./nginx
+    image: ghcr.io/gchelp/film-react-nest-nginx:latest
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    volumes:
+      - frontend-dist:/usr/share/nginx/html:ro
+    depends_on:
+      frontend:
+        condition: service_completed_successfully
+      backend:
+        condition: service_started
+    networks:
+      - film-net
+
+volumes:
+  db-data:
+  pgadmin-data:
+  frontend-dist:
+
+networks:
+  film-net:
