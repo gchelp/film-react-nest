@@ -1,11 +1,12 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Film, Session } from '../films/schemas/film.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Film } from '../films/entities/film.entity';
+import { Schedule } from '../films/entities/schedule.entity';
 import { FilmDto, ScheduleDto } from '../films/dto/films.dto';
 
 const toFilmDto = (f: Film): FilmDto => ({
@@ -20,7 +21,7 @@ const toFilmDto = (f: Film): FilmDto => ({
   cover: f.cover,
 });
 
-const toScheduleDto = (s: Session): ScheduleDto => ({
+const toScheduleDto = (s: Schedule): ScheduleDto => ({
   id: s.id,
   daytime: s.daytime,
   hall: s.hall,
@@ -33,18 +34,31 @@ const toScheduleDto = (s: Session): ScheduleDto => ({
 @Injectable()
 export class FilmsRepository {
   constructor(
-    @InjectModel(Film.name) private readonly filmModel: Model<Film>,
+    @InjectRepository(Film) private readonly films: Repository<Film>,
+    @InjectRepository(Schedule)
+    private readonly schedules: Repository<Schedule>,
   ) {}
 
   async findAll(): Promise<FilmDto[]> {
-    const films = await this.filmModel.find().lean();
+    const films = await this.films.find();
     return films.map(toFilmDto);
   }
 
   async findSchedule(id: string): Promise<ScheduleDto[]> {
-    const film = await this.filmModel.findOne({ id }).lean();
+    const film = await this.films.findOne({ where: { id } });
     if (!film) throw new NotFoundException('Film not found');
-    return film.schedule.map(toScheduleDto);
+    const items = await this.schedules.find({
+      where: { filmId: id },
+      order: { daytime: 'ASC' },
+    });
+    return items.map(toScheduleDto);
+  }
+
+  async getSession(
+    filmId: string,
+    sessionId: string,
+  ): Promise<Schedule | null> {
+    return this.schedules.findOne({ where: { id: sessionId, filmId } });
   }
 
   async takeSeat(
@@ -52,25 +66,19 @@ export class FilmsRepository {
     sessionId: string,
     seatKey: string,
   ): Promise<void> {
-    const result = await this.filmModel.updateOne(
-      {
-        id: filmId,
-        schedule: { $elemMatch: { id: sessionId, taken: { $ne: seatKey } } },
-      },
-      { $push: { 'schedule.$.taken': seatKey } },
+    const result = await this.schedules.query(
+      `UPDATE schedules
+       SET taken = CASE WHEN taken = '' THEN $3 ELSE taken || ',' || $3 END
+       WHERE id = $1 AND "filmId" = $2
+         AND NOT ($3 = ANY(string_to_array(taken, ',')))`,
+      [sessionId, filmId, seatKey],
     );
 
-    if (result.matchedCount === 0) {
-      const film = await this.filmModel.findOne({ id: filmId }).lean();
-      const session = film?.schedule.find((s) => s.id === sessionId);
-      if (!film || !session)
-        throw new NotFoundException('Film or session not found');
+    const affected: number = Array.isArray(result) ? result[1] : 0;
+    if (!affected) {
+      const session = await this.getSession(filmId, sessionId);
+      if (!session) throw new NotFoundException('Film or session not found');
       throw new BadRequestException(`Seat ${seatKey} is already taken`);
     }
-  }
-
-  async getSession(filmId: string, sessionId: string): Promise<Session | null> {
-    const film = await this.filmModel.findOne({ id: filmId }).lean();
-    return film?.schedule.find((s) => s.id === sessionId) ?? null;
   }
 }
