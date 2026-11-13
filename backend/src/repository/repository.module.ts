@@ -3,13 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Film } from '../films/entities/film.entity';
 import { Schedule } from '../films/entities/schedule.entity';
-import { FilmsRepository } from './films.repository';
+import { FilmsRepository, FilmsTypeormRepository } from './films.repository';
 
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
+        const driver = config.getOrThrow<string>('DATABASE_DRIVER');
+        if (driver !== 'postgres') {
+          throw new Error(`Unsupported DATABASE_DRIVER: ${driver}`);
+        }
         const url = new URL(config.getOrThrow<string>('DATABASE_URL'));
         return {
           type: 'postgres' as const,
@@ -25,7 +29,7 @@ import { FilmsRepository } from './films.repository';
     }),
     TypeOrmModule.forFeature([Film, Schedule]),
   ],
-  providers: [FilmsRepository],
+  providers: [{ provide: FilmsRepository, useClass: FilmsTypeormRepository }],
   exports: [FilmsRepository],
 })
 export class RepositoryModule {}

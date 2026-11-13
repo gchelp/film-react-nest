@@ -9,6 +9,20 @@ import { Film } from '../films/entities/film.entity';
 import { Schedule } from '../films/entities/schedule.entity';
 import { FilmDto, ScheduleDto } from '../films/dto/films.dto';
 
+export abstract class FilmsRepository {
+  abstract findAll(): Promise<FilmDto[]>;
+  abstract findSchedule(id: string): Promise<ScheduleDto[]>;
+  abstract getSession(
+    filmId: string,
+    sessionId: string,
+  ): Promise<Schedule | null>;
+  abstract takeSeat(
+    filmId: string,
+    sessionId: string,
+    seatKey: string,
+  ): Promise<void>;
+}
+
 const toFilmDto = (f: Film): FilmDto => ({
   id: f.id,
   rating: f.rating,
@@ -32,7 +46,7 @@ const toScheduleDto = (s: Schedule): ScheduleDto => ({
 });
 
 @Injectable()
-export class FilmsRepository {
+export class FilmsTypeormRepository implements FilmsRepository {
   constructor(
     @InjectRepository(Film) private readonly films: Repository<Film>,
     @InjectRepository(Schedule)
