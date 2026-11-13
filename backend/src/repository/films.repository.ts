@@ -1,12 +1,27 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Film, Session } from '../films/schemas/film.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Film } from '../films/entities/film.entity';
+import { Schedule } from '../films/entities/schedule.entity';
 import { FilmDto, ScheduleDto } from '../films/dto/films.dto';
+
+export abstract class FilmsRepository {
+  abstract findAll(): Promise<FilmDto[]>;
+  abstract findSchedule(id: string): Promise<ScheduleDto[]>;
+  abstract getSession(
+    filmId: string,
+    sessionId: string,
+  ): Promise<Schedule | null>;
+  abstract takeSeat(
+    filmId: string,
+    sessionId: string,
+    seatKey: string,
+  ): Promise<void>;
+}
 
 const toFilmDto = (f: Film): FilmDto => ({
   id: f.id,
@@ -20,7 +35,7 @@ const toFilmDto = (f: Film): FilmDto => ({
   cover: f.cover,
 });
 
-const toScheduleDto = (s: Session): ScheduleDto => ({
+const toScheduleDto = (s: Schedule): ScheduleDto => ({
   id: s.id,
   daytime: s.daytime,
   hall: s.hall,
@@ -31,20 +46,33 @@ const toScheduleDto = (s: Session): ScheduleDto => ({
 });
 
 @Injectable()
-export class FilmsRepository {
+export class FilmsTypeormRepository implements FilmsRepository {
   constructor(
-    @InjectModel(Film.name) private readonly filmModel: Model<Film>,
+    @InjectRepository(Film) private readonly films: Repository<Film>,
+    @InjectRepository(Schedule)
+    private readonly schedules: Repository<Schedule>,
   ) {}
 
   async findAll(): Promise<FilmDto[]> {
-    const films = await this.filmModel.find().lean();
+    const films = await this.films.find();
     return films.map(toFilmDto);
   }
 
   async findSchedule(id: string): Promise<ScheduleDto[]> {
-    const film = await this.filmModel.findOne({ id }).lean();
+    const film = await this.films.findOne({ where: { id } });
     if (!film) throw new NotFoundException('Film not found');
-    return film.schedule.map(toScheduleDto);
+    const items = await this.schedules.find({
+      where: { filmId: id },
+      order: { daytime: 'ASC' },
+    });
+    return items.map(toScheduleDto);
+  }
+
+  async getSession(
+    filmId: string,
+    sessionId: string,
+  ): Promise<Schedule | null> {
+    return this.schedules.findOne({ where: { id: sessionId, filmId } });
   }
 
   async takeSeat(
@@ -52,25 +80,17 @@ export class FilmsRepository {
     sessionId: string,
     seatKey: string,
   ): Promise<void> {
-    const result = await this.filmModel.updateOne(
-      {
-        id: filmId,
-        schedule: { $elemMatch: { id: sessionId, taken: { $ne: seatKey } } },
-      },
-      { $push: { 'schedule.$.taken': seatKey } },
-    );
-
-    if (result.matchedCount === 0) {
-      const film = await this.filmModel.findOne({ id: filmId }).lean();
-      const session = film?.schedule.find((s) => s.id === sessionId);
-      if (!film || !session)
-        throw new NotFoundException('Film or session not found');
-      throw new BadRequestException(`Seat ${seatKey} is already taken`);
-    }
-  }
-
-  async getSession(filmId: string, sessionId: string): Promise<Session | null> {
-    const film = await this.filmModel.findOne({ id: filmId }).lean();
-    return film?.schedule.find((s) => s.id === sessionId) ?? null;
+    await this.schedules.manager.transaction(async (manager) => {
+      const session = await manager.findOne(Schedule, {
+        where: { id: sessionId, filmId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!session) throw new NotFoundException('Film or session not found');
+      if (session.taken.includes(seatKey)) {
+        throw new BadRequestException(`Seat ${seatKey} is already taken`);
+      }
+      session.taken = [...session.taken, seatKey];
+      await manager.save(session);
+    });
   }
 }
