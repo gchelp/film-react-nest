@@ -6,7 +6,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Film } from './film.entity';
-import { csvTransformer } from './csv.transformer';
 
 @Entity('schedules')
 export class Schedule {
@@ -28,7 +27,7 @@ export class Schedule {
   @Column({ type: 'double precision' })
   price: number;
 
-  @Column({ type: 'text', transformer: csvTransformer })
+  @Column('simple-array')
   taken: string[];
 
   @Column({ type: 'uuid', nullable: true })

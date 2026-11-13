@@ -80,19 +80,17 @@ export class FilmsTypeormRepository implements FilmsRepository {
     sessionId: string,
     seatKey: string,
   ): Promise<void> {
-    const result = await this.schedules.query(
-      `UPDATE schedules
-       SET taken = CASE WHEN taken = '' THEN $3 ELSE taken || ',' || $3 END
-       WHERE id = $1 AND "filmId" = $2
-         AND NOT ($3 = ANY(string_to_array(taken, ',')))`,
-      [sessionId, filmId, seatKey],
-    );
-
-    const affected: number = Array.isArray(result) ? result[1] : 0;
-    if (!affected) {
-      const session = await this.getSession(filmId, sessionId);
+    await this.schedules.manager.transaction(async (manager) => {
+      const session = await manager.findOne(Schedule, {
+        where: { id: sessionId, filmId },
+        lock: { mode: 'pessimistic_write' },
+      });
       if (!session) throw new NotFoundException('Film or session not found');
-      throw new BadRequestException(`Seat ${seatKey} is already taken`);
-    }
+      if (session.taken.includes(seatKey)) {
+        throw new BadRequestException(`Seat ${seatKey} is already taken`);
+      }
+      session.taken = [...session.taken, seatKey];
+      await manager.save(session);
+    });
   }
 }
