@@ -1,36 +1,56 @@
 # FILM!
 
-## Установка
+Приложение для покупки билетов в кино: фронтенд на React, бэкенд на NestJS, база данных PostgreSQL.
 
-### MongoDB
+## Автор
 
-Установите MongoDB скачав дистрибутив с официального сайта или с помощью пакетного менеджера вашей ОС. Также можно воспользоваться Docker (см. ветку `feat/docker`.
+Глеб, когорта 48, курс «Фулстек-разработчик»
 
-Выполните скрипт `test/mongodb_initial_stub.js` в консоли `mongo`.
+## Ссылки
 
-### Бэкенд
+- Репозиторий: https://github.com/gchelp/film-react-nest
+- Опубликованное приложение: http://84.201.146.132
 
-Перейдите в папку с исходным кодом бэкенда
+## Запуск в Docker
 
-`cd backend`
+Создайте файл `.env` в корне проекта из примера `.env.example` и задайте значения (пароли `POSTGRES_PASSWORD` и `DATABASE_PASSWORD` должны совпадать).
 
-Установите зависимости (точно такие же, как в package-lock.json) помощью команд
+```bash
+docker compose up -d --build
+```
 
-`npm ci` или `yarn install --frozen-lockfile`
+После запуска приложение доступно на порту 80, pgAdmin на порту 8080.
 
-Создайте `.env` файл из примера `.env.example`, в нём укажите:
+### Наполнение базы
 
-* `DATABASE_DRIVER` - тип драйвера СУБД - в нашем случае это `mongodb` 
-* `DATABASE_URL` - адрес СУБД MongoDB, например `mongodb://127.0.0.1:27017/practicum`.  
+1. Откройте pgAdmin и добавьте сервер: хост `database`, порт `5432`, база `prac`, пользователь и пароль из `.env`.
+2. В Query Tool по очереди выполните файлы из `backend/test`: `prac.init.sql` (без строки `create database`, база уже создана контейнером), `prac.films.sql`, `prac.shedules.sql`.
 
-MongoDB должна быть установлена и запущена.
+## Локальная разработка бэкенда
 
-Запустите бэкенд:
+```bash
+cd backend
+npm ci
+cp .env.example .env
+npm run start:dev
+```
 
-`npm start:debug`
+Нужна запущенная PostgreSQL. Переменные окружения описаны в `backend/.env.example`:
 
-Для проверки отправьте тестовый запрос с помощью Postman или `curl`.
+- `DATABASE_DRIVER` — `postgres`
+- `DATABASE_URL` — адрес СУБД, например `postgres://localhost:5432/prac`
+- `DATABASE_USERNAME`, `DATABASE_PASSWORD` — учётные данные
+- `PORT` — порт бэкенда
+- `LOGGER` — формат логов: `dev`, `json` или `tskv`
 
+## Тесты и линтер
 
+```bash
+cd backend
+npm test
+npm run lint
+```
 
+## Деплой
 
+Образы бэкенда, фронтенда и nginx собираются GitHub Actions при каждом коммите в `main` и публикуются в GitHub Container Registry (`ghcr.io/gchelp/film-react-nest-*`). На сервере проект запускается через `docker compose` из этих образов.
